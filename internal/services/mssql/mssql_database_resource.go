@@ -29,7 +29,9 @@ import (
 	"github.com/hashicorp/go-azure-sdk/resource-manager/sql/2023-08-01-preview/transparentdataencryptions"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-provider-azurerm/helpers/tf"
+	helperValidate "github.com/hashicorp/terraform-provider-azurerm/helpers/validate"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/features"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/locks"
 	keyVaultParser "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/parse"
 	keyVaultValidate "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/validate"
@@ -507,9 +509,9 @@ func resourceMsSqlDatabaseCreate(d *pluginsdk.ResourceData, meta interface{}) er
 			state = transparentdataencryptions.TransparentDataEncryptionStateEnabled
 		}
 
-		tde, err := transparentEncryptionClient.Get(ctx, id)
-		if err != nil {
-			return fmt.Errorf("while retrieving Transparent Data Encryption state for %s: %+v", id, err)
+		tde, retryErr := transparentEncryptionClient.Get(ctx, id)
+		if retryErr != nil {
+			return fmt.Errorf("while retrieving Transparent Data Encryption state for %s: %+v", id, retryErr)
 		}
 
 		currentState := transparentdataencryptions.TransparentDataEncryptionStateDisabled
@@ -521,21 +523,21 @@ func resourceMsSqlDatabaseCreate(d *pluginsdk.ResourceData, meta interface{}) er
 
 		// Submit TDE state only when state is being changed, otherwise it can cause unwanted detection of state changes from the cloud side
 		if !strings.EqualFold(string(currentState), string(state)) {
-			input := transparentdataencryptions.LogicalDatabaseTransparentDataEncryption{
+			tdePayload := transparentdataencryptions.LogicalDatabaseTransparentDataEncryption{
 				Properties: &transparentdataencryptions.TransparentDataEncryptionProperties{
 					State: state,
 				},
 			}
 
-			if err := transparentEncryptionClient.CreateOrUpdateThenPoll(ctx, id, input); err != nil {
+			if err := transparentEncryptionClient.CreateOrUpdateThenPoll(ctx, id, tdePayload); err != nil {
 				return fmt.Errorf("while enabling Transparent Data Encryption for %q: %+v", id.String(), err)
 			}
 
 			// NOTE: Internal x-ref, this is another case of hashicorp/go-azure-sdk#307 so this can be removed once that's fixed
-			if err = pluginsdk.Retry(d.Timeout(pluginsdk.TimeoutCreate), func() *pluginsdk.RetryError {
-				c, err := client.Get(ctx, id, databases.DefaultGetOperationOptions())
-				if err != nil {
-					return pluginsdk.NonRetryableError(fmt.Errorf("while polling %s for status: %+v", id.String(), err))
+			if retryErr = pluginsdk.Retry(d.Timeout(pluginsdk.TimeoutCreate), func() *pluginsdk.RetryError {
+				c, err2 := client.Get(ctx, id, databases.DefaultGetOperationOptions())
+				if err2 != nil {
+					return pluginsdk.NonRetryableError(fmt.Errorf("while polling %s for status: %+v", id.String(), err2))
 				}
 				if c.Model != nil && c.Model.Properties != nil && c.Model.Properties.Status != nil {
 					if c.Model.Properties.Status == pointer.To(databases.DatabaseStatusScaling) {
@@ -546,8 +548,8 @@ func resourceMsSqlDatabaseCreate(d *pluginsdk.ResourceData, meta interface{}) er
 				}
 
 				return nil
-			}); err != nil {
-				return nil
+			}); retryErr != nil {
+				return retryErr
 			}
 		} else {
 			log.Print("[DEBUG] Skipping re-writing of Transparent Data Encryption, since encryption state is not changing ...")
@@ -595,7 +597,7 @@ func resourceMsSqlDatabaseCreate(d *pluginsdk.ResourceData, meta interface{}) er
 
 		return nil
 	}); err != nil {
-		return nil
+		return err
 	}
 
 	longTermRetentionPolicyProps := helper.ExpandLongTermRetentionPolicy(d.Get("long_term_retention_policy").([]interface{}))
@@ -999,7 +1001,7 @@ func resourceMsSqlDatabaseUpdate(d *pluginsdk.ResourceData, meta interface{}) er
 				}
 				return nil
 			}); err != nil {
-				return nil
+				return err
 			}
 		}
 	}
@@ -1048,7 +1050,7 @@ func resourceMsSqlDatabaseUpdate(d *pluginsdk.ResourceData, meta interface{}) er
 
 		return nil
 	}); err != nil {
-		return nil
+		return err
 	}
 
 	if d.HasChange("long_term_retention_policy") {
@@ -1480,7 +1482,7 @@ func PossibleValuesForEmailAccountAdminsStatus() []string {
 }
 
 func resourceMsSqlDatabaseSchema() map[string]*pluginsdk.Schema {
-	return map[string]*pluginsdk.Schema{
+	resource := map[string]*pluginsdk.Schema{
 		"name": {
 			Type:         pluginsdk.TypeString,
 			Required:     true,
@@ -1821,4 +1823,64 @@ func resourceMsSqlDatabaseSchema() map[string]*pluginsdk.Schema {
 
 		"tags": commonschema.Tags(),
 	}
+
+	if !features.FivePointOhBeta() {
+		atLeastOneOf := []string{
+			"long_term_retention_policy.0.weekly_retention", "long_term_retention_policy.0.monthly_retention",
+			"long_term_retention_policy.0.yearly_retention", "long_term_retention_policy.0.week_of_year",
+		}
+		resource["long_term_retention_policy"] = &pluginsdk.Schema{
+			Type:     pluginsdk.TypeList,
+			Optional: true,
+			Computed: true,
+			MaxItems: 1,
+			Elem: &pluginsdk.Resource{
+				Schema: map[string]*pluginsdk.Schema{
+					// WeeklyRetention - The weekly retention policy for an LTR backup in an ISO 8601 format.
+					"weekly_retention": {
+						Type:         pluginsdk.TypeString,
+						Optional:     true,
+						Computed:     true,
+						ValidateFunc: helperValidate.ISO8601Duration,
+						AtLeastOneOf: atLeastOneOf,
+					},
+
+					// MonthlyRetention - The monthly retention policy for an LTR backup in an ISO 8601 format.
+					"monthly_retention": {
+						Type:         pluginsdk.TypeString,
+						Optional:     true,
+						Computed:     true,
+						ValidateFunc: helperValidate.ISO8601Duration,
+						AtLeastOneOf: atLeastOneOf,
+					},
+
+					// YearlyRetention - The yearly retention policy for an LTR backup in an ISO 8601 format.
+					"yearly_retention": {
+						Type:         pluginsdk.TypeString,
+						Optional:     true,
+						Computed:     true,
+						ValidateFunc: helperValidate.ISO8601Duration,
+						AtLeastOneOf: atLeastOneOf,
+					},
+
+					// WeekOfYear - The week of year to take the yearly backup in an ISO 8601 format.
+					"week_of_year": {
+						Type:         pluginsdk.TypeInt,
+						Optional:     true,
+						Computed:     true,
+						ValidateFunc: validation.IntBetween(0, 52),
+						AtLeastOneOf: atLeastOneOf,
+					},
+
+					"immutable_backups_enabled": {
+						Type:     pluginsdk.TypeBool,
+						Optional: true,
+						Default:  false,
+					},
+				},
+			},
+		}
+	}
+
+	return resource
 }

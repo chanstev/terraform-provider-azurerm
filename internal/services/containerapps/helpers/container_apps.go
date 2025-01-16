@@ -9,10 +9,9 @@ import (
 
 	"github.com/hashicorp/go-azure-helpers/lang/pointer"
 	"github.com/hashicorp/go-azure-helpers/resourcemanager/commonids"
-	"github.com/hashicorp/go-azure-sdk/resource-manager/containerapps/2023-05-01/containerapps"
 	"github.com/hashicorp/go-azure-sdk/resource-manager/containerapps/2023-05-01/daprcomponents"
+	"github.com/hashicorp/go-azure-sdk/resource-manager/containerapps/2024-03-01/containerapps"
 	"github.com/hashicorp/go-azure-sdk/resource-manager/containerapps/2024-03-01/managedenvironments"
-	"github.com/hashicorp/terraform-provider-azurerm/internal/features"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/sdk"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/services/containerapps/validate"
 	keyVaultValidate "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/validate"
@@ -162,67 +161,61 @@ type Ingress struct {
 }
 
 func ContainerAppIngressSchema() *pluginsdk.Schema {
-	r := &pluginsdk.Resource{
-		Schema: map[string]*pluginsdk.Schema{
-			"allow_insecure_connections": {
-				Type:        pluginsdk.TypeBool,
-				Optional:    true,
-				Default:     false,
-				Description: "Should this ingress allow insecure connections?",
-			},
-
-			"external_enabled": {
-				Type:        pluginsdk.TypeBool,
-				Optional:    true,
-				Default:     false,
-				Description: "Is this an external Ingress.",
-			},
-
-			"custom_domain": ContainerAppIngressCustomDomainSchemaComputed(),
-
-			"fqdn": {
-				Type:        pluginsdk.TypeString,
-				Computed:    true,
-				Description: "The FQDN of the ingress.",
-			},
-
-			"ip_security_restriction": ContainerAppIngressIpSecurityRestriction(),
-
-			"target_port": {
-				Type:         pluginsdk.TypeInt,
-				Required:     true,
-				ValidateFunc: validation.IntBetween(1, 65535),
-				Description:  "The target port on the container for the Ingress traffic.",
-			},
-
-			"exposed_port": {
-				Type:         pluginsdk.TypeInt,
-				Optional:     true,
-				ValidateFunc: validation.IntBetween(1, 65535),
-				Description:  "The exposed port on the container for the Ingress traffic.",
-			},
-
-			"traffic_weight": ContainerAppIngressTrafficWeight(),
-
-			"transport": {
-				Type:         pluginsdk.TypeString,
-				Optional:     true,
-				Default:      string(containerapps.IngressTransportMethodAuto),
-				ValidateFunc: validation.StringInSlice(containerapps.PossibleValuesForIngressTransportMethod(), false),
-				Description:  "The transport method for the Ingress. Possible values include `auto`, `http`, and `http2`, `tcp`. Defaults to `auto`",
-			},
-		},
-	}
-
-	if !features.FourPointOhBeta() {
-		r.Schema["custom_domain"] = ContainerAppIngressCustomDomainSchema()
-	}
-
 	return &pluginsdk.Schema{
 		Type:     pluginsdk.TypeList,
 		Optional: true,
 		MaxItems: 1,
-		Elem:     r,
+		Elem: &pluginsdk.Resource{
+			Schema: map[string]*pluginsdk.Schema{
+				"allow_insecure_connections": {
+					Type:        pluginsdk.TypeBool,
+					Optional:    true,
+					Default:     false,
+					Description: "Should this ingress allow insecure connections?",
+				},
+
+				"external_enabled": {
+					Type:        pluginsdk.TypeBool,
+					Optional:    true,
+					Default:     false,
+					Description: "Is this an external Ingress.",
+				},
+
+				"custom_domain": ContainerAppIngressCustomDomainSchemaComputed(),
+
+				"fqdn": {
+					Type:        pluginsdk.TypeString,
+					Computed:    true,
+					Description: "The FQDN of the ingress.",
+				},
+
+				"ip_security_restriction": ContainerAppIngressIpSecurityRestriction(),
+
+				"target_port": {
+					Type:         pluginsdk.TypeInt,
+					Required:     true,
+					ValidateFunc: validation.IntBetween(1, 65535),
+					Description:  "The target port on the container for the Ingress traffic.",
+				},
+
+				"exposed_port": {
+					Type:         pluginsdk.TypeInt,
+					Optional:     true,
+					ValidateFunc: validation.IntBetween(1, 65535),
+					Description:  "The exposed port on the container for the Ingress traffic.",
+				},
+
+				"traffic_weight": ContainerAppIngressTrafficWeight(),
+
+				"transport": {
+					Type:         pluginsdk.TypeString,
+					Optional:     true,
+					Default:      string(containerapps.IngressTransportMethodAuto),
+					ValidateFunc: validation.StringInSlice(containerapps.PossibleValuesForIngressTransportMethod(), false),
+					Description:  "The transport method for the Ingress. Possible values include `auto`, `http`, and `http2`, `tcp`. Defaults to `auto`",
+				},
+			},
+		},
 	}
 }
 
@@ -820,16 +813,17 @@ func ContainerAppEnvironmentDaprMetadataSchema() *pluginsdk.Schema {
 }
 
 type ContainerTemplate struct {
-	Containers           []Container           `tfschema:"container"`
-	InitContainers       []BaseContainer       `tfschema:"init_container"`
-	Suffix               string                `tfschema:"revision_suffix"`
-	MinReplicas          int64                 `tfschema:"min_replicas"`
-	MaxReplicas          int64                 `tfschema:"max_replicas"`
-	AzureQueueScaleRules []AzureQueueScaleRule `tfschema:"azure_queue_scale_rule"`
-	CustomScaleRules     []CustomScaleRule     `tfschema:"custom_scale_rule"`
-	HTTPScaleRules       []HTTPScaleRule       `tfschema:"http_scale_rule"`
-	TCPScaleRules        []TCPScaleRule        `tfschema:"tcp_scale_rule"`
-	Volumes              []ContainerVolume     `tfschema:"volume"`
+	Containers             []Container           `tfschema:"container"`
+	InitContainers         []BaseContainer       `tfschema:"init_container"`
+	Suffix                 string                `tfschema:"revision_suffix"`
+	MinReplicas            int64                 `tfschema:"min_replicas"`
+	MaxReplicas            int64                 `tfschema:"max_replicas"`
+	AzureQueueScaleRules   []AzureQueueScaleRule `tfschema:"azure_queue_scale_rule"`
+	CustomScaleRules       []CustomScaleRule     `tfschema:"custom_scale_rule"`
+	HTTPScaleRules         []HTTPScaleRule       `tfschema:"http_scale_rule"`
+	TCPScaleRules          []TCPScaleRule        `tfschema:"tcp_scale_rule"`
+	Volumes                []ContainerVolume     `tfschema:"volume"`
+	TerminationGracePeriod int64                 `tfschema:"termination_grace_period_seconds"`
 }
 
 func ContainerTemplateSchema() *pluginsdk.Schema {
@@ -875,6 +869,14 @@ func ContainerTemplateSchema() *pluginsdk.Schema {
 					Computed:    true, // Note: O+C This value is always present and non-zero but if not user specified, then the service will generate a value.
 					Description: "The suffix for the revision. This value must be unique for the lifetime of the Resource. If omitted the service will use a hash function to create one.",
 				},
+
+				"termination_grace_period_seconds": {
+					Type:         pluginsdk.TypeInt,
+					Optional:     true,
+					Default:      0,
+					ValidateFunc: validation.IntBetween(0, 600),
+					Description:  "The time in seconds after the container is sent the termination signal before the process if forcibly killed.",
+				},
 			},
 		},
 	}
@@ -916,6 +918,11 @@ func ContainerTemplateSchemaComputed() *pluginsdk.Schema {
 					Type:     pluginsdk.TypeString,
 					Computed: true,
 				},
+
+				"termination_grace_period_seconds": {
+					Type:     pluginsdk.TypeInt,
+					Computed: true,
+				},
 			},
 		},
 	}
@@ -938,6 +945,10 @@ func ExpandContainerAppTemplate(input []ContainerTemplate, metadata sdk.Resource
 			template.Scale = &containerapps.Scale{}
 		}
 		template.Scale.MaxReplicas = pointer.To(config.MaxReplicas)
+	}
+
+	if config.TerminationGracePeriod != 0 {
+		template.TerminationGracePeriodSeconds = pointer.To(config.TerminationGracePeriod)
 	}
 
 	if config.MinReplicas != 0 {
@@ -969,10 +980,11 @@ func FlattenContainerAppTemplate(input *containerapps.Template) []ContainerTempl
 		return []ContainerTemplate{}
 	}
 	result := ContainerTemplate{
-		Containers:     flattenContainerAppContainers(input.Containers),
-		InitContainers: flattenInitContainerAppContainers(input.InitContainers),
-		Suffix:         pointer.From(input.RevisionSuffix),
-		Volumes:        flattenContainerAppVolumes(input.Volumes),
+		Containers:             flattenContainerAppContainers(input.Containers),
+		InitContainers:         flattenInitContainerAppContainers(input.InitContainers),
+		Suffix:                 pointer.From(input.RevisionSuffix),
+		TerminationGracePeriod: pointer.From(input.TerminationGracePeriodSeconds),
+		Volumes:                flattenContainerAppVolumes(input.Volumes),
 	}
 
 	if scale := input.Scale; scale != nil {
