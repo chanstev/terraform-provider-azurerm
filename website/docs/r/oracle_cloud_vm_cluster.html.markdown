@@ -133,6 +133,8 @@ The following arguments are supported:
 
 * `scan_listener_port_tcp_ssl` - (Optional) The TCPS Single Client Access Name (SCAN) port. The default port to 2484. Changing this forces a new Cloud VM Cluster to be created.
 
+* `system_version` - (Optional) Operating system version of the Exadata image.
+
 * `tags` - (Optional) A mapping of tags which should be assigned to the Cloud VM Cluster.
 
 * `time_zone` - (Optional) The time zone of the Cloud VM Cluster. For details, see [Exadata Infrastructure Time Zones](https://docs.cloud.oracle.com/iaas/Content/Database/References/timezones.htm). Changing this forces a new Cloud VM Cluster to be created.
