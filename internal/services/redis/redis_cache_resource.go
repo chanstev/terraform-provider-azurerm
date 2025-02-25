@@ -350,7 +350,7 @@ func resourceRedisCache() *pluginsdk.Resource {
 			"redis_version": {
 				Type:         pluginsdk.TypeString,
 				Optional:     true,
-				Default:      6,
+				Default:      "6",
 				ValidateFunc: validation.StringInSlice([]string{"4", "6"}, false),
 				DiffSuppressFunc: func(_, old, new string, _ *pluginsdk.ResourceData) bool {
 					n := strings.Split(old, ".")
@@ -397,7 +397,7 @@ func resourceRedisCache() *pluginsdk.Resource {
 		),
 	}
 
-	if !features.FivePointOhBeta() {
+	if !features.FivePointOh() {
 		resource.Schema["minimum_tls_version"] = &pluginsdk.Schema{
 			Type:     pluginsdk.TypeString,
 			Optional: true,
